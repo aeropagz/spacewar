@@ -20,10 +20,12 @@
 </template>
 
 <script>
+  import Gateway from "@/assets/js/Gateway.js";
+
   export default {
     mounted() {
-      const arenaRef = this.$refs.arena;
-      arenaRef.focus();
+      this.$refs.arena.focus();
+      this.process_feed();
     },
     created() {
       this.moveShip();
@@ -50,6 +52,7 @@
           players: {},
         },
         clientTick: null,
+        gateway: null,
       };
     },
     computed: {
@@ -87,6 +90,7 @@
         }
         this.controls[payload.dir] = payload.pressed;
       },
+
       moveShip() {
         this.clientTick = setInterval(() => {
           if (this.controls.up) {
@@ -99,6 +103,43 @@
             this.status.field.y += 50;
           }
         }, 50);
+      },
+
+      process_feed() {
+        this.gateway = new Gateway();
+        this.gateway.feed((msg) => {
+          let data = JSON.parse(msg);
+          let { code, payload } = data;
+
+          console.log(msg);
+
+          switch (code) {
+            case "ping":
+              this.status.ping = payload.ping;
+              break;
+            case "register":
+              this.status.uuid = payload.uuid;
+              this.gateway.send({
+                code: "set_name",
+                payload: {
+                  name: this.status.name.substring(0, 16),
+                },
+              });
+              break;
+            case "player_state":
+              if (!payload.players[this.status.uuid]) {
+                break;
+              }
+
+              this.status.field.x = payload.players.[this.state.uuid].pos.x;
+              this.status.field.y = payload.players.[this.state.uuid].pos.y;
+              this.status.players = payload.players;
+
+              break;
+          }
+        });
+
+        this.gateway.start();
       },
     },
   };

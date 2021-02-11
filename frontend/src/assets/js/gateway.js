@@ -23,7 +23,7 @@ class Gateway {
 
     console.log("gateway ready");
   }
-  on_message() {
+  on_message(message) {
     for (const cb of this.callback) {
       cb(message.data);
     }
@@ -57,7 +57,7 @@ class Gateway {
   }
 
   feed(callback) {
-    this.callbacks.push(callback);
+    this.callback.push(callback);
   }
 }
 
