@@ -1,4 +1,4 @@
-# spacefighter
+# spacewar
 
 ## Project setup
 ```
