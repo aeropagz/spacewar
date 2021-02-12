@@ -6,7 +6,7 @@ class Gateway {
   }
 
   start() {
-    this.connection = new WebSocket("sampleUrl");
+    this.connection = new WebSocket("ws://localhost:8888");
 
     this.connection.onopen = this.on_open.bind(this);
     this.connection.onmessage = this.on_message.bind(this);

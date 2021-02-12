@@ -3,18 +3,35 @@
     class="arena"
     @keydown="handleKey('down', $event)"
     @keyup="handleKey('up', $event)"
+    @mousemove="updateMouse"
     ref="arena"
     tabindex="-1"
   >
+    <div class="ping">{{ this.status.ping }}</div>
     <div>
       <img
         src="@/assets/spaceship_klaas.gif"
         alt="spaceship"
         class="player-local"
+        :style="{
+          transform: `rotate(${updateRotation}rad)`,
+        }"
       />
     </div>
     <div class="field" :style="fieldStyle">
-      <div class="players"></div>
+      <div v-if="otherPlayers.arr.length" class="players-remote">
+        <div v-for="player in otherPlayers.arr" :key="player.uuid">
+          <img
+            src="@/assets/spaceship_klaas.gif"
+            alt=""
+            class="player-remote"
+            :style="{
+              top: `calc(${(player.pos.y / 4000) * 100}%)`,
+              left: `calc(${(player.pos.x / 4000) * 100}%)`,
+            }"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -27,12 +44,10 @@
       this.$refs.arena.focus();
       this.process_feed();
     },
-    created() {
-      this.moveShip();
+    updated(){
+      this.controls.rotation = this.updateRotation;
     },
-    beforeDestroy() {
-      clearInterval(this.clientTick);
-    },
+
     data() {
       return {
         controls: {
@@ -40,28 +55,51 @@
           left: 0,
           down: 0,
           right: 0,
+          mouseX:0,
+          mouseY:0,
+          rotation: 0,
         },
         status: {
           ping: "0ms",
           uuid: null,
-          name: null,
+          name: "test",
           field: {
             x: 2000,
             y: 2000,
           },
           players: {},
         },
-        clientTick: null,
+        intervalDeg: null,
         gateway: null,
       };
     },
     computed: {
       fieldStyle() {
         return {
-          top: `calc(50% - ${this.status.field.x}px)`,
-          left: `calc(50% - ${this.status.field.y}px)`,
+          top: `calc(50% - ${this.status.field.y}px)`,
+          left: `calc(50% - ${this.status.field.x}px)`,
         };
       },
+
+      updateRotation() {
+        let deltaY = this.controls.mouseY - window.innerHeight / 2
+        let deltaX = this.controls.mouseX  - window.innerWidth / 2
+        let degree = Math.atan(deltaY / deltaX);
+        if (this.controls.mouseX < window.innerWidth / 2) {
+          degree += Math.PI
+        }
+        degree += Math.PI/2;
+        return degree
+      },
+
+      otherPlayers(){
+        const otherPlayers = Object.keys(this.status.players)
+        .map(key =>{
+          return this.status.players[key]
+        })
+        .filter(player => player.uuid !== this.status.uuid);
+        return {arr: otherPlayers}
+      }
     },
     methods: {
       handleKey(type, e) {
@@ -89,31 +127,32 @@
           return;
         }
         this.controls[payload.dir] = payload.pressed;
+
+        this.gateway.send({
+          code: 'movement',
+          payload
+        })
+
       },
 
-      moveShip() {
-        this.clientTick = setInterval(() => {
-          if (this.controls.up) {
-            this.status.field.x -= 50;
-          } else if (this.controls.down) {
-            this.status.field.x += 50;
-          } else if (this.controls.left) {
-            this.status.field.y -= 50;
-          } else if (this.controls.right) {
-            this.status.field.y += 50;
-          }
-        }, 50);
+      updateMouse(event){
+          this.controls.mouseX = event.clientX;
+          this.controls.mouseY =  event.clientY;
       },
+
 
       process_feed() {
         this.gateway = new Gateway();
+
         this.gateway.feed((msg) => {
           let data = JSON.parse(msg);
           let { code, payload } = data;
 
-          console.log(msg);
+
 
           switch (code) {
+
+
             case "ping":
               this.status.ping = payload.ping;
               break;
@@ -128,14 +167,16 @@
               break;
             case "player_state":
               if (!payload.players[this.status.uuid]) {
+                console.error("Own player not found");
                 break;
               }
-
-              this.status.field.x = payload.players.[this.state.uuid].pos.x;
-              this.status.field.y = payload.players.[this.state.uuid].pos.y;
+              this.status.field.x = payload.players.[this.status.uuid].pos.x;
+              this.status.field.y = payload.players.[this.status.uuid].pos.y;
               this.status.players = payload.players;
 
               break;
+            default:
+              console.error(`Code: '${code}' not valid`);
           }
         });
 
@@ -154,13 +195,20 @@
     bottom: 0;
     overflow: hidden;
     background: #111a29;
-
-    .player-local {
+    .ping {
       position: absolute;
-      top: calc(50% - 100px);
-      left: calc(50% - 100px);
-      width: 200px;
-      height: 200px;
+      top: 20px;
+      left: 20px;
+      z-index: 2;
+      font-size: 20px;
+    }
+    .player-local,
+    .player-remote {
+      position: absolute;
+      top: calc(50% - 36px);
+      left: calc(50% - 44px);
+      width: 88px;
+      height: 72px;
       z-index: 1;
     }
     .field {
