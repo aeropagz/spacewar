@@ -3,7 +3,7 @@
     class="arena"
     @keydown="handleKey('down', $event)"
     @keyup="handleKey('up', $event)"
-    @mousemove="updateMouse"
+    @mousemove="updateMouse($event)"
     ref="arena"
     tabindex="-1"
   >
@@ -14,13 +14,13 @@
         alt="spaceship"
         class="player-local"
         :style="{
-          transform: `rotate(${updateRotation}rad)`,
+          transform: `rotate(${controls.rotation}rad)`,
         }"
       />
     </div>
     <div class="field" :style="fieldStyle">
-      <div v-if="otherPlayers.arr.length" class="players-remote">
-        <div v-for="player in otherPlayers.arr" :key="player.uuid">
+      <div v-if="otherPlayers.length" class="players-remote">
+        <div v-for="player in otherPlayers" :key="player.uuid">
           <img
             src="@/assets/spaceship_klaas.gif"
             alt=""
@@ -28,6 +28,7 @@
             :style="{
               top: `calc(${(player.pos.y / 4000) * 100}%)`,
               left: `calc(${(player.pos.x / 4000) * 100}%)`,
+              transform: `rotate(${player.pos.rotation}rad)`,
             }"
           />
         </div>
@@ -43,9 +44,10 @@
     mounted() {
       this.$refs.arena.focus();
       this.process_feed();
+      this.gameInterval = setInterval(this.gameLoop, 40);
     },
-    updated(){
-      this.controls.rotation = this.updateRotation;
+    beforeDestroy() {
+      clearInterval(this.gameInterval);
     },
 
     data() {
@@ -55,8 +57,8 @@
           left: 0,
           down: 0,
           right: 0,
-          mouseX:0,
-          mouseY:0,
+          mouseX: 0,
+          mouseY: 0,
           rotation: 0,
         },
         status: {
@@ -69,7 +71,7 @@
           },
           players: {},
         },
-        intervalDeg: null,
+        gameInterval: null,
         gateway: null,
       };
     },
@@ -82,26 +84,49 @@
       },
 
       updateRotation() {
-        let deltaY = this.controls.mouseY - window.innerHeight / 2
-        let deltaX = this.controls.mouseX  - window.innerWidth / 2
+        let deltaY = this.controls.mouseY - window.innerHeight / 2;
+        let deltaX = this.controls.mouseX - window.innerWidth / 2;
         let degree = Math.atan(deltaY / deltaX);
         if (this.controls.mouseX < window.innerWidth / 2) {
-          degree += Math.PI
+          degree += Math.PI;
         }
-        degree += Math.PI/2;
-        return degree
+        degree += Math.PI / 2;
+        return degree;
       },
 
-      otherPlayers(){
+      otherPlayers() {
         const otherPlayers = Object.keys(this.status.players)
-        .map(key =>{
-          return this.status.players[key]
-        })
-        .filter(player => player.uuid !== this.status.uuid);
-        return {arr: otherPlayers}
-      }
+          .map((key) => {
+            return this.status.players[key];
+          })
+          .filter((player) => player.uuid !== this.status.uuid);
+        return otherPlayers;
+      },
     },
     methods: {
+      gameLoop() {
+        if (this.controls.up) this.status.field.y -= 8;
+        if (this.controls.down) this.status.field.y += 8;
+        if (this.controls.left) this.status.field.x -= 8;
+        if (this.controls.right) this.status.field.x += 8;
+        this.status.field.x = this.clamp(this.status.field.x, 0, 4000);
+        this.status.field.y = this.clamp(this.status.field.y, 0, 4000);
+        this.controls.rotation = this.updateRotation;
+        let payload = {
+          position: {
+            x: this.status.field.x,
+            y: this.status.field.y,
+          },
+          rotation: this.controls.rotation,
+        };
+        this.gateway.send({ code: "movement", payload });
+        console.log(this.otherPlayers[0]);
+      },
+
+      clamp(num, min, max) {
+        return Math.min(Math.max(num, min), max);
+      },
+
       handleKey(type, e) {
         let key = e.which || e.keyCode;
         let payload = {
@@ -127,35 +152,24 @@
           return;
         }
         this.controls[payload.dir] = payload.pressed;
-
-        this.gateway.send({
-          code: 'movement',
-          payload
-        })
-
       },
 
-      updateMouse(event){
-          this.controls.mouseX = event.clientX;
-          this.controls.mouseY =  event.clientY;
+      updateMouse(event) {
+        this.controls.mouseX = event.clientX;
+        this.controls.mouseY = event.clientY;
       },
-
 
       process_feed() {
         this.gateway = new Gateway();
-
         this.gateway.feed((msg) => {
           let data = JSON.parse(msg);
           let { code, payload } = data;
 
-
-
           switch (code) {
-
-
             case "ping":
               this.status.ping = payload.ping;
               break;
+
             case "register":
               this.status.uuid = payload.uuid;
               this.gateway.send({
@@ -165,16 +179,16 @@
                 },
               });
               break;
+
             case "player_state":
               if (!payload.players[this.status.uuid]) {
                 console.error("Own player not found");
                 break;
               }
-              this.status.field.x = payload.players.[this.status.uuid].pos.x;
-              this.status.field.y = payload.players.[this.status.uuid].pos.y;
-              this.status.players = payload.players;
 
+              this.status.players = payload.players;
               break;
+
             default:
               console.error(`Code: '${code}' not valid`);
           }
@@ -201,6 +215,7 @@
       left: 20px;
       z-index: 2;
       font-size: 20px;
+      user-select: none;
     }
     .player-local,
     .player-remote {
@@ -210,6 +225,11 @@
       width: 88px;
       height: 72px;
       z-index: 1;
+      user-select: none;
+      -moz-user-select: none;
+      -webkit-user-drag: none;
+      -webkit-user-select: none;
+      -ms-user-select: none;
     }
     .field {
       position: absolute;

@@ -23,14 +23,9 @@ const state = {
   },
 };
 
-set_interval(() => {
+setInterval(() => {
   for (let player in state.game1.players) {
     player = state.game1.players[player];
-    if (player.input.up) player.pos.y -= 22;
-    if (player.input.down) player.pos.y += 22;
-    if (player.input.left) player.pos.x -= 22;
-    if (player.input.right) player.pos.x += 22;
-
     player.pos.x = clamp(player.pos.x, 0, FIELD_MAX_WIDTH);
     player.pos.y = clamp(player.pos.y, 0, FIELD_MAX_HEIGHT);
   }
@@ -44,7 +39,7 @@ set_interval(() => {
       },
     })
   );
-}, 50);
+}, 40);
 
 wss.on("connection", (socket) => {
   const rsub = new ioredis(6379, "localhost");
@@ -57,12 +52,7 @@ wss.on("connection", (socket) => {
     pos: {
       x: 2000,
       y: 2000,
-    },
-    input: {
-      up: 0,
-      left: 0,
-      down: 0,
-      right: 0,
+      rotation: 0,
     },
   };
 
@@ -78,17 +68,17 @@ wss.on("connection", (socket) => {
   socket.on("message", (message) => {
     try {
       message = JSON.parse(message);
-      console.log(message);
       let player = state.game1.players[socket.uuid];
-      switch (message.code) {
-        
-        case "movement":
-          let { pressed, dir } = message.payload;
 
-          player.input[dir] = pressed;
+      switch (message.code) {
+        case CODE_MOVEMENT:
+          let { position, rotation } = message.payload;
+          player.pos.x = position.x;
+          player.pos.y = position.y;
+          player.pos.rotation = rotation;
           break;
 
-        case "set_name":
+        case CODE_SET_NAME:
           let { name } = message.payload;
           player.name = name;
           break;
@@ -113,7 +103,7 @@ wss.on("connection", (socket) => {
   });
 });
 
-set_interval(() => {
+setInterval(() => {
   wss.clients.for_each((socket) => {
     if (socket.alive === false) {
       return socket.terminate();
