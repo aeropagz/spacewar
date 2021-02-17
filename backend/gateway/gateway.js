@@ -10,6 +10,7 @@ const FIELD_MAX_HEIGHT = 4000;
 const CODE_PING = "ping";
 const CODE_REGISTER = "register";
 const CODE_PLAYER_STATE = "player_state";
+const CODE_PROJECTILES = "projectiles";
 
 const CODE_MOVEMENT = "movement";
 const CODE_SET_NAME = "set_name";
@@ -20,6 +21,7 @@ const rpub = new ioredis(6379, "localhost");
 const state = {
   game1: {
     players: {},
+    projectiles: {},
   },
 };
 
@@ -36,6 +38,7 @@ setInterval(() => {
       code: CODE_PLAYER_STATE,
       payload: {
         players: state.game1.players,
+        projectiles: state.game1.projectiles,
       },
     })
   );
@@ -70,6 +73,7 @@ wss.on("connection", (socket) => {
     try {
       message = JSON.parse(message);
       let player = state.game1.players[socket.uuid];
+      let shots = state.game1.projectiles;
 
       switch (message.code) {
         case CODE_MOVEMENT:
@@ -84,6 +88,10 @@ wss.on("connection", (socket) => {
           player.name = name;
           player.ship = ship;
           break;
+
+        case CODE_PROJECTILES:
+          let { projectiles } = message.payload;
+          shots[socket.uuid] = projectiles;
       }
     } catch (e) {
       console.log(e);
@@ -104,7 +112,7 @@ wss.on("connection", (socket) => {
     socket.send(message);
   });
 });
-
+//keep alive
 setInterval(() => {
   wss.clients.for_each((socket) => {
     if (socket.alive === false) {

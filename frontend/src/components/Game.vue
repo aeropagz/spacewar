@@ -42,10 +42,10 @@
           <p class="playerName">{{ player.name }}</p>
         </div>
       </div>
-      <div v-if="projectiles.length">
+      <div v-if="ownProjectiles.length">
         <div
           class="projectile"
-          v-for="(projectile, index) in projectiles"
+          v-for="(projectile, index) in ownProjectiles"
           :key="`projectile-${index}`"
           :style="{
             top: `calc(${(projectile.y / 4000) * 100}%)`,
@@ -88,7 +88,8 @@
           mouseY: 0,
           rotation: 0,
         },
-        projectiles: [],
+        ownProjectiles: [],
+        otherProjectiles: [],
         ammo: 20,
         status: {
           ping: "0ms",
@@ -145,7 +146,7 @@
         };
 
         if (this.shooting && this.ammo) {
-          this.projectiles.push({
+          this.ownProjectiles.push({
             x: this.status.field.x,
             y: this.status.field.y,
             dir: this.controls.rotation - Math.PI / 2,
@@ -154,9 +155,9 @@
           this.ammo--;
         }
 
-        this.projectiles.forEach((projectile, index) => {
+        this.ownProjectiles.forEach((projectile, index) => {
           if (projectile.ticks <= 0) {
-            this.projectiles.splice(index, 1);
+            this.ownProjectiles.splice(index, 1);
             this.ammo++;
           }
           projectile.x += 20 * Math.cos(projectile.dir);
@@ -165,7 +166,11 @@
         });
 
         this.gateway.send({ code: "movement", payload });
-        console.log(this.ammo);
+        if (this.ownProjectiles.length)
+          this.gateway.send({
+            code: "projectiles",
+            payload: { projectiles: this.ownProjectiles },
+          });
       },
 
       clamp(num, min, max) {
@@ -209,6 +214,7 @@
         this.gateway.feed((msg) => {
           let data = JSON.parse(msg);
           let { code, payload } = data;
+          let tempProjectiles = [];
 
           switch (code) {
             case "ping":
@@ -233,6 +239,14 @@
               }
 
               this.status.players = payload.players;
+              delete payload.projectiles[this.status.uuid];
+              Object.keys(payload.projectiles).map((key) => {
+                tempProjectiles.push(payload.projectiles[key]);
+                console.log(payload.projectiles[key].length);
+                console.log(payload.projectiles[key][0]);
+              });
+
+              this.otherProjectiles = [...tempProjectiles];
               break;
 
             default:
