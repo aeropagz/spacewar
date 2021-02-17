@@ -49,6 +49,7 @@ wss.on("connection", (socket) => {
   state.game1.players[socket.uuid] = {
     uuid: socket.uuid,
     name: "unknown",
+    ship: "",
     pos: {
       x: 2000,
       y: 2000,
@@ -79,9 +80,9 @@ wss.on("connection", (socket) => {
           break;
 
         case CODE_SET_NAME:
-          let { name } = message.payload;
-          console.log(name);
+          let { name, ship } = message.payload;
           player.name = name;
+          player.ship = ship;
           break;
       }
     } catch (e) {

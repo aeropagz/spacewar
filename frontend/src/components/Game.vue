@@ -4,32 +4,58 @@
     @keydown="handleKey('down', $event)"
     @keyup="handleKey('up', $event)"
     @mousemove="updateMouse($event)"
+    @mousedown="startShoot()"
+    @mouseup="stopShoot()"
     ref="arena"
     tabindex="-1"
   >
+    <div class="center"></div>
     <div class="ping">{{ this.status.ping }}</div>
-    <div>
+    <div class="player-local">
       <img
-        src="@/assets/spaceship_klaas.gif"
-        alt="spaceship"
-        class="player-local"
-        :style="{
-          transform: `rotate(${controls.rotation}rad)`,
-        }"
+        :src="status.ship"
+        :style="{ transform: `rotate(${controls.rotation}rad)` }"
       />
     </div>
-    <div class="field" :style="fieldStyle">
-      <div v-if="otherPlayers.length" class="players-remote">
-        <div v-for="player in otherPlayers" :key="player.uuid">
+    <div
+      class="field"
+      :style="{
+        top: `calc(50% - ${this.status.field.y}px)`,
+        left: `calc(50% - ${this.status.field.x}px)`,
+      }"
+    >
+      <div v-if="otherPlayers.length">
+        <div
+          class="player-remote"
+          v-for="player in otherPlayers"
+          :key="player.uuid"
+          :style="{
+            top: `calc(${(player.pos.y / 4000) * 100}%)`,
+            left: `calc(${(player.pos.x / 4000) * 100}%)`,
+          }"
+        >
           <img
-            src="@/assets/spaceship_klaas.gif"
+            :src="player.ship"
             alt=""
-            class="player-remote"
-            :style="{
-              top: `calc(${(player.pos.y / 4000) * 100}%)`,
-              left: `calc(${(player.pos.x / 4000) * 100}%)`,
-              transform: `rotate(${player.pos.rotation}rad)`,
-            }"
+            :style="{ transform: `rotate(${player.pos.rotation}rad)` }"
+          />
+          <p class="playerName">{{ player.name }}</p>
+        </div>
+      </div>
+      <div v-if="projectiles.length">
+        <div
+          class="projectile"
+          v-for="(projectile, index) in projectiles"
+          :key="`projectile-${index}`"
+          :style="{
+            top: `calc(${(projectile.y / 4000) * 100}%)`,
+            left: `calc(${(projectile.x / 4000) * 100}%)`,
+          }"
+        >
+          <img
+            src="shot.png"
+            alt=""
+            :style="{ transform: `rotate(${projectile.dir + Math.PI / 2}rad)` }"
           />
         </div>
       </div>
@@ -62,10 +88,13 @@
           mouseY: 0,
           rotation: 0,
         },
+        projectiles: [],
+        ammo: 20,
         status: {
           ping: "0ms",
           uuid: null,
           name: localStorage.getItem("name") || "",
+          ship: localStorage.getItem("ship") || "",
           field: {
             x: 2000,
             y: 2000,
@@ -74,16 +103,10 @@
         },
         gameInterval: null,
         gateway: null,
+        publicPath: process.env.BASE_URL,
       };
     },
     computed: {
-      fieldStyle() {
-        return {
-          top: `calc(50% - ${this.status.field.y}px)`,
-          left: `calc(50% - ${this.status.field.x}px)`,
-        };
-      },
-
       updateRotation() {
         let deltaY = this.controls.mouseY - window.innerHeight / 2;
         let deltaX = this.controls.mouseX - window.innerWidth / 2;
@@ -120,8 +143,29 @@
           },
           rotation: this.controls.rotation,
         };
+
+        if (this.shooting && this.ammo) {
+          this.projectiles.push({
+            x: this.status.field.x,
+            y: this.status.field.y,
+            dir: this.controls.rotation - Math.PI / 2,
+            ticks: 50,
+          });
+          this.ammo--;
+        }
+
+        this.projectiles.forEach((projectile, index) => {
+          if (projectile.ticks <= 0) {
+            this.projectiles.splice(index, 1);
+            this.ammo++;
+          }
+          projectile.x += 20 * Math.cos(projectile.dir);
+          projectile.y += 20 * Math.sin(projectile.dir);
+          projectile.ticks--;
+        });
+
         this.gateway.send({ code: "movement", payload });
-        console.log(this.otherPlayers[0]);
+        console.log(this.ammo);
       },
 
       clamp(num, min, max) {
@@ -177,6 +221,7 @@
                 code: "set_name",
                 payload: {
                   name: this.status.name.substring(0, 16),
+                  ship: this.status.ship,
                 },
               });
               break;
@@ -196,6 +241,12 @@
         });
 
         this.gateway.start();
+      },
+      startShoot() {
+        this.shooting = true;
+      },
+      stopShoot() {
+        this.shooting = false;
       },
     },
   };
@@ -221,16 +272,21 @@
     .player-local,
     .player-remote {
       position: absolute;
-      top: calc(50% - 36px);
-      left: calc(50% - 44px);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 99;
+    }
+
+    .player-local img,
+    .player-remote img {
       width: 88px;
       height: 72px;
-      z-index: 1;
-      user-select: none;
-      -moz-user-select: none;
-      -webkit-user-drag: none;
-      -webkit-user-select: none;
-      -ms-user-select: none;
+    }
+    .projectile {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      z-index: 3;
     }
     .field {
       position: absolute;
@@ -242,6 +298,30 @@
       background-image: url("~@/assets/hex.png");
       background-color: #334b78;
       transition: all 0.1s;
+    }
+    .playerName {
+      z-index: 2;
+      color: white;
+      margin: 12px 0px;
+      text-align: center;
+    }
+    * {
+      margin: 0px;
+      padding: 0px;
+      user-select: none;
+      -moz-user-select: none;
+      -webkit-user-drag: none;
+      -webkit-user-select: none;
+      -ms-user-select: none;
+    }
+    .center {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      top: calc(50%);
+      left: calc(50%);
+      background-color: rgb(0, 255, 13);
+      z-index: 100;
     }
   }
 </style>
