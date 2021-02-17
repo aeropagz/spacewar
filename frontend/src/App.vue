@@ -1,15 +1,12 @@
-!<template>
-  <game></game>
+<template>
+  <div id="app">
+    <router-view />
+  </div>
 </template>
 
-<script>
-  import Game from "./components/Game.vue";
-
-  export default {
-    components: { Game },
-  };
-</script>
-
-<style>
-  
+<style lang="less">
+  body {
+    color: white;
+    font-family: Arial, Helvetica, sans-serif;
+  }
 </style>

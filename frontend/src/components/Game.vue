@@ -48,6 +48,7 @@
     },
     beforeDestroy() {
       clearInterval(this.gameInterval);
+      this.gateway.stop();
     },
 
     data() {
@@ -64,7 +65,7 @@
         status: {
           ping: "0ms",
           uuid: null,
-          name: "test",
+          name: localStorage.getItem("name") || "",
           field: {
             x: 2000,
             y: 2000,

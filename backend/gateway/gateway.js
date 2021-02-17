@@ -80,6 +80,7 @@ wss.on("connection", (socket) => {
 
         case CODE_SET_NAME:
           let { name } = message.payload;
+          console.log(name);
           player.name = name;
           break;
       }
