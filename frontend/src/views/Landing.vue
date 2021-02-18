@@ -1,7 +1,7 @@
 <template>
   <div class="arena">
-    <h2>SpaceWar</h2>
     <div class="playerName">
+      <h2>SpaceWar</h2>
       <input
         type="text"
         placeholder="Please enter your name and hit enter"
@@ -71,6 +71,10 @@
     text-align: center;
   }
   .playerName {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%s);
     margin: 50px auto;
     padding: 20px;
     border: 3px solid rgb(110, 110, 110);
