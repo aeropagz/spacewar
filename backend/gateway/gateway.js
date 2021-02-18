@@ -109,6 +109,7 @@ wss.on("connection", (socket) => {
   socket.on("close", () => {
     rsub.disconnect();
     delete state.game1.players[socket.uuid];
+    delete state.game1.projectiles[socket.uuid];
   });
 
   socket.on("pong", () => {

@@ -76,11 +76,12 @@
     mounted() {
       this.$refs.arena.focus();
       this.process_feed();
-      this.gameInterval = setInterval(this.gameLoop, 40);
+      this.gameInterval = setInterval(this.gameLoop, 50);
     },
     beforeDestroy() {
       clearInterval(this.gameInterval);
       this.gateway.stop();
+      this.gateway = null;
     },
 
     data() {
@@ -155,15 +156,18 @@
     methods: {
       gameLoop() {
         if (this.status.health <= 0) {
-          this.gateway.stop();
-          this.gateway = null;
+          this.ownProjectiles = [];
+          this.gateway.send({
+            code: "projectiles",
+            payload: { projectiles: this.ownProjectiles },
+          });
           this.$router.push("lost");
         }
 
-        if (this.controls.up) this.status.field.y -= 8;
-        if (this.controls.down) this.status.field.y += 8;
-        if (this.controls.left) this.status.field.x -= 8;
-        if (this.controls.right) this.status.field.x += 8;
+        if (this.controls.up) this.status.field.y -= 12;
+        if (this.controls.down) this.status.field.y += 12;
+        if (this.controls.left) this.status.field.x -= 12;
+        if (this.controls.right) this.status.field.x += 12;
         this.status.field.x = this.clamp(this.status.field.x, 0, 4000);
         this.status.field.y = this.clamp(this.status.field.y, 0, 4000);
         this.controls.rotation = this.updateRotation;
