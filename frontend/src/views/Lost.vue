@@ -11,7 +11,7 @@
   export default {
     methods: {
       restart() {
-        this.$router.push("arena");
+        this.$router.push("/");
       },
     },
   };

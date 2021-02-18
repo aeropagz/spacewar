@@ -154,10 +154,10 @@
     },
     methods: {
       gameLoop() {
-        if (!this.status.health) {
+        if (this.status.health <= 0) {
           this.gateway.stop();
           this.gateway = null;
-          this.$router.push("landing");
+          this.$router.push("lost");
         }
 
         if (this.controls.up) this.status.field.y -= 8;
