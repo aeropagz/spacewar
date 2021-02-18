@@ -74,7 +74,7 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%s);
+    transform: translate(-50%, -50%);
     margin: 50px auto;
     padding: 20px;
     border: 3px solid rgb(110, 110, 110);
