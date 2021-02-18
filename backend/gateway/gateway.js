@@ -11,6 +11,7 @@ const CODE_PING = "ping";
 const CODE_REGISTER = "register";
 const CODE_PLAYER_STATE = "player_state";
 const CODE_PROJECTILES = "projectiles";
+const CODE_PLAYER_HIT = "player_hit";
 
 const CODE_MOVEMENT = "movement";
 const CODE_SET_NAME = "set_name";
@@ -58,6 +59,7 @@ wss.on("connection", (socket) => {
       y: 2000,
       rotation: 0,
     },
+    health: 100,
   };
 
   socket.send(
@@ -65,6 +67,7 @@ wss.on("connection", (socket) => {
       code: CODE_REGISTER,
       payload: {
         uuid: socket.uuid,
+        healt: 100,
       },
     })
   );
@@ -92,6 +95,11 @@ wss.on("connection", (socket) => {
         case CODE_PROJECTILES:
           let { projectiles } = message.payload;
           shots[socket.uuid] = projectiles;
+          break;
+
+        case CODE_PLAYER_HIT:
+          let { playerHit } = message.payload;
+          state.game1.players[playerHit]["health"] -= 5;
       }
     } catch (e) {
       console.log(e);

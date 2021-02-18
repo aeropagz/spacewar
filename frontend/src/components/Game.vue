@@ -10,7 +10,10 @@
     tabindex="-1"
   >
     <div class="center"></div>
-    <div class="ping">{{ this.status.ping }}</div>
+    <div class="ping">
+      {{ this.status.ping }} <br />
+      {{ this.status.health }}
+    </div>
     <div class="player-local">
       <img
         :src="status.ship"
@@ -42,10 +45,13 @@
           <p class="playerName">{{ player.name }}</p>
         </div>
       </div>
-      <div v-if="ownProjectiles.length">
+      <div v-if="[...ownProjectiles, ...otherProjectiles].length">
         <div
           class="projectile"
-          v-for="(projectile, index) in ownProjectiles"
+          v-for="(projectile, index) in [
+            ...ownProjectiles,
+            ...otherProjectiles,
+          ]"
           :key="`projectile-${index}`"
           :style="{
             top: `calc(${(projectile.y / 4000) * 100}%)`,
@@ -91,11 +97,13 @@
         ownProjectiles: [],
         otherProjectiles: [],
         ammo: 20,
+        ammoCoolDown: [],
         status: {
           ping: "0ms",
           uuid: null,
           name: localStorage.getItem("name") || "",
           ship: localStorage.getItem("ship") || "",
+          health: null,
           field: {
             x: 2000,
             y: 2000,
@@ -127,9 +135,30 @@
           .filter((player) => player.uuid !== this.status.uuid);
         return otherPlayers;
       },
+      hitboxesOtherPlayers() {
+        let hitboxes = {};
+        this.otherPlayers.forEach((player) => {
+          let ymin = player.pos.y + 36;
+          let ymax = player.pos.y - 36;
+          let xmin = player.pos.x + 36;
+          let xmax = player.pos.x - 36;
+          hitboxes[player.uuid] = {
+            ymin,
+            ymax,
+            xmin,
+            xmax,
+          };
+        });
+        return hitboxes;
+      },
     },
     methods: {
       gameLoop() {
+        if (!this.status.health) {
+          this.gateway.stop();
+          this.$router.push("lost");
+        }
+
         if (this.controls.up) this.status.field.y -= 8;
         if (this.controls.down) this.status.field.y += 8;
         if (this.controls.left) this.status.field.x -= 8;
@@ -144,6 +173,16 @@
           },
           rotation: this.controls.rotation,
         };
+        this.ammoCoolDown = this.ammoCoolDown
+          .map((cooldown) => cooldown - 1)
+          .filter((cooldown) => {
+            if (cooldown > 0) {
+              return true;
+            } else {
+              this.ammo++;
+              return false;
+            }
+          });
 
         if (this.shooting && this.ammo) {
           this.ownProjectiles.push({
@@ -160,17 +199,34 @@
             this.ownProjectiles.splice(index, 1);
             this.ammo++;
           }
+
+          Object.keys(this.hitboxesOtherPlayers).map((playerId) => {
+            let hitbox = this.hitboxesOtherPlayers[playerId];
+            if (
+              projectile.x < hitbox.xmin &&
+              projectile.x > hitbox.xmax &&
+              projectile.y < hitbox.ymin &&
+              projectile.y > hitbox.ymax
+            ) {
+              this.gateway.send({
+                code: "player_hit",
+                payload: { playerHit: playerId },
+              });
+              this.ammoCoolDown.push(projectile.ticks);
+              this.ownProjectiles.splice(index, 1);
+            }
+          });
+
           projectile.x += 20 * Math.cos(projectile.dir);
           projectile.y += 20 * Math.sin(projectile.dir);
           projectile.ticks--;
         });
 
         this.gateway.send({ code: "movement", payload });
-        if (this.ownProjectiles.length)
-          this.gateway.send({
-            code: "projectiles",
-            payload: { projectiles: this.ownProjectiles },
-          });
+        this.gateway.send({
+          code: "projectiles",
+          payload: { projectiles: this.ownProjectiles },
+        });
       },
 
       clamp(num, min, max) {
@@ -223,6 +279,7 @@
 
             case "register":
               this.status.uuid = payload.uuid;
+              this.status.health = payload.health;
               this.gateway.send({
                 code: "set_name",
                 payload: {
@@ -237,13 +294,11 @@
                 console.error("Own player not found");
                 break;
               }
-
+              this.status.health = payload.players[this.status.uuid]["health"];
               this.status.players = payload.players;
               delete payload.projectiles[this.status.uuid];
               Object.keys(payload.projectiles).map((key) => {
-                tempProjectiles.push(payload.projectiles[key]);
-                console.log(payload.projectiles[key].length);
-                console.log(payload.projectiles[key][0]);
+                tempProjectiles.push(...payload.projectiles[key]);
               });
 
               this.otherProjectiles = [...tempProjectiles];
