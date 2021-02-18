@@ -103,7 +103,7 @@
           uuid: null,
           name: localStorage.getItem("name") || "",
           ship: localStorage.getItem("ship") || "",
-          health: null,
+          health: 100,
           field: {
             x: 2000,
             y: 2000,
@@ -156,7 +156,8 @@
       gameLoop() {
         if (!this.status.health) {
           this.gateway.stop();
-          this.$router.push("lost");
+          this.gateway = null;
+          this.$router.push("landing");
         }
 
         if (this.controls.up) this.status.field.y -= 8;
