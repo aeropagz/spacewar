@@ -322,7 +322,7 @@
   };
 </script>
 
-<style lang="less">
+<style lang="less" scoped>
   .arena {
     position: absolute;
     top: 0;
