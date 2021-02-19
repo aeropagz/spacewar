@@ -1,71 +1,33 @@
 <template>
-  <div
-    class="arena"
-    @keydown="handleKey('down', $event)"
-    @keyup="handleKey('up', $event)"
-    @mousemove="updateMouse($event)"
-    @mousedown="startShoot()"
-    @mouseup="stopShoot()"
-    ref="arena"
-    tabindex="-1"
-  >
-    <div class="center"></div>
-    <div class="ping">
-      {{ this.status.ping }} <br />
-      {{ this.status.health }}
+  <div>
+    <div class="ping">{{ this.status.ping }}</div>
+    <div class="health">
+      <div class="progress progress-striped">
+        <div
+          class="progress-bar"
+          :style="{ width: `${(this.status.health / 100) * 100}%` }"
+        ></div>
+      </div>
     </div>
-    <div class="player-local">
-      <img
-        :src="status.ship"
-        :style="{ transform: `rotate(${controls.rotation}rad)` }"
-      />
+    <div class="ammo">
+      <div class="progress progress-striped">
+        <div
+          class="progress-bar"
+          :style="{ width: `${(this.ammo / 20) * 100}%` }"
+        ></div>
+      </div>
     </div>
-    <div
-      class="field"
-      :style="{
-        top: `calc(50% - ${this.status.field.y}px)`,
-        left: `calc(50% - ${this.status.field.x}px)`,
-      }"
+    <canvas
+      id="arena"
+      @keydown="handleKey('down', $event)"
+      @keyup="handleKey('up', $event)"
+      @mousemove="updateMouse($event)"
+      @mousedown="startShoot()"
+      @mouseup="stopShoot()"
+      ref="arena"
+      tabindex="-1"
     >
-      <div v-if="otherPlayers.length">
-        <div
-          class="player-remote"
-          v-for="player in otherPlayers"
-          :key="player.uuid"
-          :style="{
-            top: `calc(${(player.pos.y / 4000) * 100}%)`,
-            left: `calc(${(player.pos.x / 4000) * 100}%)`,
-          }"
-        >
-          <img
-            :src="player.ship"
-            alt=""
-            :style="{ transform: `rotate(${player.pos.rotation}rad)` }"
-          />
-          <p class="playerName">{{ player.name }}</p>
-        </div>
-      </div>
-      <div v-if="[...ownProjectiles, ...otherProjectiles].length">
-        <div
-          class="projectile"
-          v-for="(projectile, index) in [
-            ...ownProjectiles,
-            ...otherProjectiles,
-          ]"
-          :key="`projectile-${index}`"
-          :style="{
-            top: `calc(${(projectile.y / 4000) * 100}%)`,
-            left: `calc(${(projectile.x / 4000) * 100}%)`,
-          }"
-        >
-          <img
-            src="shot.png"
-            alt=""
-            :style="{ transform: `rotate(${projectile.dir + Math.PI / 2}rad)` }"
-          />
-        </div>
-      </div>
-    </div>
+    </canvas>
   </div>
 </template>
 
@@ -73,15 +35,26 @@
   import Gateway from "@/assets/js/Gateway.js";
 
   export default {
+    created() {
+      window.addEventListener("resize", this.initCanvas);
+    },
     mounted() {
+      this.initRef();
+      this.initCanvas();
+      this.canvasContext = this.canvas.getContext("2d");
       this.$refs.arena.focus();
       this.process_feed();
       this.gameInterval = setInterval(this.gameLoop, 50);
+      this.renderInterval = setInterval(this.render, 1000 / 60);
     },
     beforeDestroy() {
       clearInterval(this.gameInterval);
+      clearInterval(this.renderInterval);
       this.gateway.stop();
       this.gateway = null;
+    },
+    destroyed() {
+      window.removeEventListener("resize", this.initCanvas);
     },
 
     data() {
@@ -112,7 +85,14 @@
           players: {},
         },
         gameInterval: null,
+        renderInterval: null,
         gateway: null,
+        canvas: null,
+        canvasContext: null,
+        spaceshipKlaasImg: null,
+        shotImg: null,
+        backgroundImg: null,
+
         publicPath: process.env.BASE_URL,
       };
     },
@@ -155,6 +135,7 @@
     },
     methods: {
       gameLoop() {
+        // exit if dead
         if (this.status.health <= 0) {
           this.ownProjectiles = [];
           this.gateway.send({
@@ -164,6 +145,7 @@
           this.$router.push("lost");
         }
 
+        // calculate new coordinates
         if (this.controls.up) this.status.field.y -= 12;
         if (this.controls.down) this.status.field.y += 12;
         if (this.controls.left) this.status.field.x -= 12;
@@ -178,6 +160,8 @@
           },
           rotation: this.controls.rotation,
         };
+
+        // remove expired ammo cooldown
         this.ammoCoolDown = this.ammoCoolDown
           .map((cooldown) => cooldown - 1)
           .filter((cooldown) => {
@@ -189,6 +173,7 @@
             }
           });
 
+        // genereate new projectiles
         if (this.shooting && this.ammo) {
           this.ownProjectiles.push({
             x: this.status.field.x,
@@ -199,12 +184,14 @@
           this.ammo--;
         }
 
+        // calculate new positions of projectiles
         this.ownProjectiles.forEach((projectile, index) => {
+          // remove expired projectiles
           if (projectile.ticks <= 0) {
             this.ownProjectiles.splice(index, 1);
             this.ammo++;
           }
-
+          // hit detection
           Object.keys(this.hitboxesOtherPlayers).map((playerId) => {
             let hitbox = this.hitboxesOtherPlayers[playerId];
             if (
@@ -222,11 +209,13 @@
             }
           });
 
-          projectile.x += 20 * Math.cos(projectile.dir);
-          projectile.y += 20 * Math.sin(projectile.dir);
+          //move projectile
+          projectile.x += 30 * Math.cos(projectile.dir);
+          projectile.y += 30 * Math.sin(projectile.dir);
           projectile.ticks--;
         });
 
+        // send new position and own projectiles to server
         this.gateway.send({ code: "movement", payload });
         this.gateway.send({
           code: "projectiles",
@@ -234,8 +223,104 @@
         });
       },
 
+      // restrict position to boundaries
       clamp(num, min, max) {
         return Math.min(Math.max(num, min), max);
+      },
+      initRef() {
+        this.canvas = document.getElementById("arena");
+        this.spaceshipKlaasImg = new Image();
+        this.spaceshipKlaasImg.src = "/spaceship_klaas-1.png";
+        this.shotImg = new Image();
+        this.shotImg.src = "/shot.png";
+        this.backgroundImg = new Image();
+        this.backgroundImg.src = "/hex.png";
+      },
+
+      initCanvas() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        console.log("resize");
+      },
+
+      render() {
+        this.renderBackground();
+        this.renderBoundaries();
+        this.renderPlayer({
+          pos: {
+            x: this.status.field.x,
+            y: this.status.field.y,
+            rotation: this.controls.rotation,
+          },
+        });
+        this.otherPlayers.forEach(this.renderPlayer);
+        [...this.ownProjectiles, ...this.otherProjectiles].forEach(
+          this.renderProjectiles
+        );
+      },
+
+      renderPlayer(player) {
+        const { x, y, rotation } = player.pos;
+
+        const canvasX = this.canvas.width / 2 + x - this.status.field.x;
+        const canvasY = this.canvas.height / 2 + y - this.status.field.y;
+
+        this.canvasContext.save();
+        this.canvasContext.translate(canvasX, canvasY);
+        this.canvasContext.rotate(rotation);
+        this.canvasContext.drawImage(this.spaceshipKlaasImg, -44, -36, 88, 72);
+        this.canvasContext.restore();
+      },
+
+      renderProjectiles(projectile) {
+        const { x, y, dir } = projectile;
+        const canvasX = this.canvas.width / 2 + x - this.status.field.x;
+        const canvasY = this.canvas.height / 2 + y - this.status.field.y;
+
+        this.canvasContext.save();
+        this.canvasContext.translate(canvasX, canvasY);
+        this.canvasContext.rotate(dir + Math.PI / 2);
+        this.canvasContext.drawImage(this.shotImg, -2, -4, 4, 8);
+        this.canvasContext.restore();
+      },
+
+      renderBoundaries() {
+        this.canvasContext.fillStyle = "#334B78";
+        this.canvasContext.fillRect(
+          this.canvas.width / 2 - this.status.field.x,
+          this.canvas.height / 2 - this.status.field.y,
+          4000,
+          4000
+        );
+        let pattern = this.canvasContext.createPattern(
+          this.backgroundImg,
+          "repeat"
+        );
+        this.canvasContext.fillStyle = pattern;
+        this.canvasContext.save();
+        this.canvasContext.translate(
+          -this.status.field.x,
+          -this.status.field.y
+        );
+        this.canvasContext.fillRect(
+          this.status.field.x,
+          this.status.field.y,
+          this.canvas.width,
+          this.canvas.height
+        );
+        this.canvasContext.restore();
+      },
+
+      renderBackground() {
+        // my implementation
+
+        this.canvasContext.fillStyle = "#111a29";
+        this.canvasContext.fillRect(
+          0,
+          0,
+          this.canvas.width,
+          this.canvas.height
+        );
       },
 
       handleKey(type, e) {
@@ -327,75 +412,73 @@
 </script>
 
 <style lang="less" scoped>
-  .arena {
+  * {
+    user-select: none;
+    -moz-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+  }
+  .ping {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    overflow: hidden;
-    background: #111a29;
-    .ping {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 2;
-      font-size: 20px;
-      user-select: none;
-    }
-    .player-local,
-    .player-remote {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 99;
-    }
+    top: 20px;
+    left: 20px;
+    z-index: 2;
+    font-size: 20px;
+    user-select: none;
+  }
+  .health {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    width: 400px;
+    text-align: center;
+    z-index: 2;
+    font-size: 20px;
+    user-select: none;
+    transform: translate(-50%, 0);
+  }
+  .ammo {
+    position: absolute;
+    top: 20px;
+    width: 400px;
+    transform: translate(-100%, 0);
+    left: 98%;
+    z-index: 2;
+    font-size: 20px;
+    user-select: none;
+  }
+  #arena {
+    width: 100%;
+    height: 100%;
+  }
 
-    .player-local img,
-    .player-remote img {
-      width: 88px;
-      height: 72px;
-    }
-    .projectile {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      z-index: 3;
-    }
-    .field {
-      position: absolute;
-      width: 4000px;
-      height: 4000px;
-      top: calc(50%);
-      left: calc(50%);
-      border: #566f9d 1px solid;
-      background-image: url("~@/assets/hex.png");
-      background-color: #334b78;
-      transition: all 0.1s;
-    }
-    .playerName {
-      z-index: 2;
-      color: white;
-      margin: 12px 0px;
-      text-align: center;
-    }
-    * {
-      margin: 0px;
-      padding: 0px;
-      user-select: none;
-      -moz-user-select: none;
-      -webkit-user-drag: none;
-      -webkit-user-select: none;
-      -ms-user-select: none;
-    }
-    .center {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      top: calc(50%);
-      left: calc(50%);
-      background-color: rgb(0, 255, 13);
-      z-index: 100;
-    }
+  .progress {
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25),
+      0 1px rgba(255, 255, 255, 0.08);
+  }
+  .progress-bar {
+    height: 18px;
+    background-color: #ee303c;
+    border-radius: 4px;
+    transition: 0.4s linear;
+    transition-property: width, background-color;
+  }
+  .health .progress-striped .progress-bar {
+    background-color: #9efc51;
+    width: 100%;
+    background-image: linear-gradient(
+      45deg,
+      rgb(72, 252, 17) 25%,
+      transparent 25%,
+      transparent 50%,
+      rgb(72, 252, 17) 50%,
+      rgb(72, 252, 17) 75%,
+      transparent 75%,
+      transparent
+    );
   }
 </style>

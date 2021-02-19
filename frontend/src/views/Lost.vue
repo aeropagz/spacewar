@@ -17,7 +17,7 @@
   };
 </script>
 
-<style>
+<style scoped>
   .arena {
     position: absolute;
     top: 0;
@@ -30,7 +30,7 @@
   }
   .lost {
     position: absolute;
-    top: 50%;
+    top: 20%;
     left: 50%;
     margin: 50px auto;
     padding: 20px;

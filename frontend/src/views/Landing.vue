@@ -42,8 +42,8 @@
     name: "Landing",
     data() {
       return {
-        name: "",
-        ship: "spaceship_klaas.gif",
+        name: localStorage.getItem("name") || "",
+        ship: localStorage.getItem("ship") || "spaceship_klaas.gif",
       };
     },
     methods: {
@@ -72,7 +72,7 @@
   }
   .playerName {
     position: absolute;
-    top: 50%;
+    top: 20%;
     left: 50%;
     transform: translate(-50%, -50%);
     margin: 50px auto;

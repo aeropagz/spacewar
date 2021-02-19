@@ -14,8 +14,7 @@ const routes = [
   {
     path: "/arena",
     name: "Arena",
-    component: () =>
-      import(/* webpackChunkName: "about" */ "../views/Arena.vue"),
+    component: () => import("../views/Arena.vue"),
   },
   {
     path: "/lost",
