@@ -1,6 +1,27 @@
 <template>
   <div>
     <div class="ping">{{ this.status.ping }}</div>
+    <div class="leaderboard">
+      <table>
+        <thead>
+          <tr>
+            <td>Player</td>
+            <td>Kills</td>
+          </tr>
+        </thead>
+        <tr
+          v-for="(player, index) in status.leaderboard"
+          :key="`player-${index}`"
+        >
+          <td>
+            {{ player.name }}
+          </td>
+          <td>
+            {{ player.kills }}
+          </td>
+        </tr>
+      </table>
+    </div>
     <div class="health">
       <div class="progress progress-striped">
         <div
@@ -17,13 +38,18 @@
         ></div>
       </div>
     </div>
+    <div class="skills">
+      <div class="teleport"></div>
+    </div>
     <canvas
       id="arena"
       @keydown="handleKey('down', $event)"
       @keyup="handleKey('up', $event)"
       @mousemove="updateMouse($event)"
-      @mousedown="startShoot()"
-      @mouseup="stopShoot()"
+      @contextmenu.prevent="teleport()"
+      @mousedown="startShoot($event)"
+      @mouseup="stopShoot($event)"
+      @blur="clearInput()"
       ref="arena"
       tabindex="-1"
     >
@@ -33,6 +59,7 @@
 
 <script>
   import Gateway from "@/assets/js/Gateway.js";
+  import { throttle } from "throttle-debounce";
 
   export default {
     created() {
@@ -68,10 +95,6 @@
           mouseY: 0,
           rotation: 0,
         },
-        ownProjectiles: [],
-        otherProjectiles: [],
-        ammo: 20,
-        ammoCoolDown: [],
         status: {
           ping: "0ms",
           uuid: null,
@@ -83,7 +106,17 @@
             y: 2000,
           },
           players: {},
+          leaderboard: [],
         },
+        skills: {
+          teleport: {
+            ready: true,
+          },
+        },
+        ownProjectiles: [],
+        otherProjectiles: [],
+        ammoCoolDown: [],
+        ammo: 20,
         gameInterval: null,
         renderInterval: null,
         gateway: null,
@@ -227,14 +260,15 @@
       clamp(num, min, max) {
         return Math.min(Math.max(num, min), max);
       },
+
       initRef() {
         this.canvas = document.getElementById("arena");
         this.spaceshipKlaasImg = new Image();
-        this.spaceshipKlaasImg.src = "/spaceship_klaas-1.png";
+        this.spaceshipKlaasImg.src = "/img/spaceship_klaas-1.png";
         this.shotImg = new Image();
-        this.shotImg.src = "/shot.png";
+        this.shotImg.src = "/img/shot.png";
         this.backgroundImg = new Image();
-        this.backgroundImg.src = "/hex.png";
+        this.backgroundImg.src = "/img/hex.png";
       },
 
       initCanvas() {
@@ -247,6 +281,7 @@
         this.renderBackground();
         this.renderBoundaries();
         this.renderPlayer({
+          name: this.status.name,
           pos: {
             x: this.status.field.x,
             y: this.status.field.y,
@@ -350,9 +385,31 @@
         this.controls[payload.dir] = payload.pressed;
       },
 
-      updateMouse(event) {
+      updateMouse: throttle(30, function(event) {
         this.controls.mouseX = event.clientX;
         this.controls.mouseY = event.clientY;
+      }),
+
+      teleport() {
+        if (this.skills.teleport.ready) {
+          this.status.field.x +=
+            400 * Math.cos(this.controls.rotation - Math.PI / 2);
+          this.status.field.y +=
+            400 * Math.sin(this.controls.rotation - Math.PI / 2);
+          this.skills.teleport.ready = false;
+          setTimeout(() => {
+            this.skills.teleport.ready = true;
+          }, 5000);
+        }
+      },
+
+      clearInput() {
+        console.log("out");
+        Object.keys(this.controls).map((key) => {
+          if (this.controls[key] === 1) {
+            this.controls[key] = 0;
+          }
+        });
       },
 
       process_feed() {
@@ -386,12 +443,17 @@
               }
               this.status.health = payload.players[this.status.uuid]["health"];
               this.status.players = payload.players;
+              this.status.leaderboard = payload.leaderboard;
               delete payload.projectiles[this.status.uuid];
               Object.keys(payload.projectiles).map((key) => {
                 tempProjectiles.push(...payload.projectiles[key]);
               });
 
               this.otherProjectiles = [...tempProjectiles];
+              break;
+
+            case "player_killed":
+              console.log("player killed: ", payload.name);
               break;
 
             default:
@@ -401,11 +463,11 @@
 
         this.gateway.start();
       },
-      startShoot() {
-        this.shooting = true;
+      startShoot(e) {
+        if (e.button === 0) this.shooting = true; //if leftclick
       },
-      stopShoot() {
-        this.shooting = false;
+      stopShoot(e) {
+        if (e.button === 0) this.shooting = false;
       },
     },
   };
@@ -419,12 +481,19 @@
     -webkit-user-select: none;
     -ms-user-select: none;
   }
+  .skills {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background-color: rgba(255, 255, 255, 0.25);
+  }
   .ping {
     position: absolute;
     top: 20px;
     left: 20px;
     z-index: 2;
     font-size: 20px;
+    margin-bottom: 10px;
     user-select: none;
   }
   .health {
@@ -480,5 +549,20 @@
       transparent 75%,
       transparent
     );
+  }
+  .leaderboard {
+    position: absolute;
+    padding: 10px;
+    top: 50px;
+    left: 20px;
+    background-color: rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+  }
+  .leaderboard table {
+    margin-top: 10px;
+  }
+
+  .leaderboard td {
+    padding: 10px 5px;
   }
 </style>

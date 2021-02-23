@@ -12,6 +12,7 @@ const CODE_REGISTER = "register";
 const CODE_PLAYER_STATE = "player_state";
 const CODE_PROJECTILES = "projectiles";
 const CODE_PLAYER_HIT = "player_hit";
+const CODE_PLAYER_KILLED = "player_killed";
 
 const CODE_MOVEMENT = "movement";
 const CODE_SET_NAME = "set_name";
@@ -23,15 +24,24 @@ const state = {
   game1: {
     players: {},
     projectiles: {},
+    leaderboard: [],
   },
 };
 
 setInterval(() => {
+  state.game1.leaderboard = [];
   for (let player in state.game1.players) {
     player = state.game1.players[player];
     player.pos.x = clamp(player.pos.x, 0, FIELD_MAX_WIDTH);
     player.pos.y = clamp(player.pos.y, 0, FIELD_MAX_HEIGHT);
+    state.game1.leaderboard.push({ name: player.name, kills: player.kills });
   }
+
+  state.game1.leaderboard.sort((a, b) => {
+    if (a.kills < b.kills) return -1;
+    if (a.kills > b.kills) return 1;
+    return 0;
+  });
 
   rpub.publish(
     "game1",
@@ -40,6 +50,7 @@ setInterval(() => {
       payload: {
         players: state.game1.players,
         projectiles: state.game1.projectiles,
+        leaderboard: state.game1.leaderboard,
       },
     })
   );
@@ -60,6 +71,7 @@ wss.on("connection", (socket) => {
       rotation: 0,
     },
     health: 100,
+    kills: 0,
   };
 
   socket.send(
@@ -99,7 +111,20 @@ wss.on("connection", (socket) => {
 
         case CODE_PLAYER_HIT:
           let { playerHit } = message.payload;
-          state.game1.players[playerHit]["health"] -= 5;
+          if (state.game1.players[playerHit]) {
+            state.game1.players[playerHit]["health"] -= 5;
+            if (state.game1.players[playerHit]["health"] === 0) {
+              player.kills++;
+              socket.send(
+                JSON.stringify({
+                  code: "player_killed",
+                  payload: {
+                    name: state.game1.players[playerHit]["name"],
+                  },
+                })
+              );
+            }
+          }
       }
     } catch (e) {
       console.log(e);

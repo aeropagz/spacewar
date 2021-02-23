@@ -8,6 +8,7 @@
         autocomplete="off"
         name="name"
         v-model="name"
+        ref="input"
         @keyup="startGame($event)"
       />
       <div class="playerShip">
@@ -40,6 +41,9 @@
 <script>
   export default {
     name: "Landing",
+    mounted() {
+      this.$refs.input.focus();
+    },
     data() {
       return {
         name: localStorage.getItem("name") || "",
